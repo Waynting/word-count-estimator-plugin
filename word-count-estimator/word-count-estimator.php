@@ -3,7 +3,7 @@
 Plugin Name: Word Count Estimator
 Plugin URI: https://waynspace.com/
 Description: 自動計算每篇文章的字數與預估閱讀時間，顯示在文章開頭。
-Version: 1.0
+Version: 1.1
 Author: Waiting Liu
 Author URI: https://waynspace.com/
 License: GPL2
