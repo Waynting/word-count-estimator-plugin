@@ -2,29 +2,65 @@
 /*
 Plugin Name: Word Count Estimator
 Plugin URI: https://waynspace.com/
-Description: 自動計算每篇文章的字數與預估閱讀時間，顯示在文章開頭。
-Version: 1.1
-Author: Waiting Liu
+Description: 完全依照 Gutenberg 後台字數邏輯（characters_excluding_spaces／including_spaces／words）計算字數與閱讀時間，插在文章開頭。
+Version: 1.3
+Author: Wayn Liu
 Author URI: https://waynspace.com/
 License: GPL2
 */
 
-/**
- * wce_enqueue_scripts
- * 這個函式會在每次載入「單篇文章」頁面時，自動把 JS 和 CSS 載入
- */
-function wce_enqueue_scripts() {
-    if (is_single()) {
-        echo '<script>console.log("Plugin URL: ' . plugin_dir_url(__FILE__) . 'js/estimator.js");</script>';
-        wp_enqueue_script(
-            'wce-estimator',
-            plugin_dir_url(__FILE__) . 'js/estimator.js',
-            array(), null, true
-        );
+// 載入專屬 CSS
+add_action( 'wp_enqueue_scripts', 'wce_enqueue_styles' );
+function wce_enqueue_styles() {
+    if ( is_singular('post') && is_main_query() ) {
         wp_enqueue_style(
             'wce-style',
-            plugin_dir_url(__FILE__) . 'css/style.css'
+            plugin_dir_url( __FILE__ ) . 'css/style.css',
+            array(),
+            '1.3'
         );
     }
 }
-add_action('wp_enqueue_scripts', 'wce_enqueue_scripts');
+
+// 把字數與閱讀時間插到文章最前面
+add_filter( 'the_content', 'wce_prepend_word_count', 5 );
+function wce_prepend_word_count( $content ) {
+    if ( is_singular('post') && in_the_loop() && is_main_query() ) {
+
+        // 1. 取 raw block 內容
+        $raw      = get_post_field( 'post_content', get_the_ID() );
+        // 2. 解析 Gutenberg blocks
+        $rendered = function_exists( 'do_blocks' )
+            ? do_blocks( $raw )
+            : $raw;
+        // 3. 去短碼、去 HTML
+        $clean    = wp_strip_all_tags( strip_shortcodes( $rendered ) );
+
+        // 4. 依字數類型計算
+        $type     = wp_get_word_count_type(); // characters_excluding_spaces / characters_including_spaces / words
+        if ( 'characters_excluding_spaces' === $type ) {
+            // 去掉所有空白後算長度
+            $count = mb_strlen( preg_replace( '/\s+/u', '', $clean ) );
+        } elseif ( 'characters_including_spaces' === $type ) {
+            // 含空白一起算
+            $count = mb_strlen( $clean );
+        } else {
+            // 預設 words，就用 str_word_count()
+            $count = str_word_count( $clean );
+        }
+
+        // 5. 閱讀時間（200 字／分鐘）
+        $time = ceil( $count / 200 );
+
+        // 6. 輸出
+        $html = sprintf(
+            '<p class="wce-info">字數：<strong>%d</strong> 字 ｜ 預估閱讀時間：<strong>%d</strong> 分鐘</p>',
+            $count,
+            $time
+        );
+
+        return $html . $content;
+    }
+
+    return $content;
+}
